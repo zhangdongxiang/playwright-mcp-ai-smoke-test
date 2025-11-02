@@ -1,0 +1,985 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>UI 自动化测试报告</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: 'Microsoft YaHei', 'Segoe UI', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 20px;
+            min-height: 100vh;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            overflow: hidden;
+        }
+        .header {
+            background: linear-gradient(135deg, #2f3b45 0%, #263238 100%); /* 更柔和、偏暗的页眉色 */
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+        .header .subtitle {
+            font-size: 1.1em;
+            opacity: 0.9;
+        }
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            padding: 30px;
+            background: #f8f9fa;
+        }
+        .stat-card {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            text-align: center;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            transition: transform 0.3s;
+        }
+        .stat-card:hover {
+            transform: translateY(-5px);
+        }
+        .stat-card .value {
+            font-size: 2.5em;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+    .stat-card.total .value { color: #455A64; }
+    .stat-card.passed .value { color: #2E7D32; }
+    .stat-card.failed .value { color: #C62828; }
+    .stat-card.duration .value { color: #E65100; }
+        .stat-card .label {
+            font-size: 1.1em;
+            color: #666;
+        }
+        .content-wrapper {
+            padding: 20px 30px;
+            background: white;
+        }
+        /* 田字格布局：2 列 2 行，用于展示四个主要图表 */
+        .grid-container {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 18px;
+            align-items: start;
+            padding: 10px 0;
+        }
+        .grid-item .chart-section {
+            height: 100%;
+            min-height: 240px;
+        }
+        /* 图表行：左侧主图（饼图+趋势），右侧为增长曲线 */
+        .chart-row {
+            display: flex;
+            gap: 18px;
+            align-items: flex-start;
+            justify-content: center;
+            padding: 18px 0;
+        }
+        .chart-main {
+            flex: 1 1 0;
+            max-width: calc(100% - 300px);
+        }
+        .chart-side {
+            flex: 0 0 280px; /* 放置小型增长曲线 */
+            text-align: center;
+            padding: 12px;
+            background: #f3f4f6;
+            border-radius: 10px;
+            box-shadow: 0 6px 18px rgba(0,0,0,0.04);
+            height: fit-content;
+        }
+        .chart-section {
+            width: 100%;
+            margin: 0 auto;
+            text-align: center;
+            /* 使用 flex 布局以便图片可以填充剩余空间 */
+            display: flex;
+            flex-direction: column;
+            padding: 0; /* 移除内边距以便图片平铺 */
+            background: #f3f4f6; /* 更柔和的浅灰背景 */
+            border-radius: 10px;
+            box-shadow: 0 6px 18px rgba(0,0,0,0.04);
+            overflow: hidden;
+        }
+        /* 图片延伸到容器左右对齐 */
+        /* 图片平铺：占满格子剩余空间 */
+        .chart-section img, .trend-under img, .chart-side img {
+            width: 100%;
+            height: 100%;
+            flex: 1 1 auto;
+            object-fit: cover; /* 填充格子，可能裁剪以保持视觉一致 */
+            display: block;
+        }
+        /* 将饼图缩小为当前尺寸的 2/3，居中显示且不被裁剪 */
+        .chart-section .pie-image {
+            width: 33%;
+            height: 33%;
+            margin: auto;
+            object-fit: contain; /* 保持完整图像，不裁剪 */
+            display: block;
+        }
+        .trend-under {
+            margin-top: 18px;
+            padding-top: 8px;
+            border-top: 1px solid rgba(0,0,0,0.05);
+        }
+        .trend-under h3 {
+            margin-top: 6px;
+            margin-bottom: 8px;
+            color: #333;
+            font-size: 1.15em;
+        }
+        .chart-section img {
+            max-width: 100%;
+            border-radius: 0 0 10px 10px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        }
+        .chart-section h3 {
+            margin-bottom: 15px;
+            color: #333;
+            font-size: 1.3em;
+        }
+        .test-cases {
+            padding: 16px 20px;
+            max-height: 380px; /* 默认显示约5条，用滚动查看其余 */
+            overflow-y: auto;
+            margin: 18px 30px;
+            scrollbar-width: thin; /* Firefox */
+            scrollbar-color: rgba(0,0,0,0.16) transparent;
+        }
+
+        .test-cases::-webkit-scrollbar {
+            width: 10px;
+        }
+        .test-cases::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        .test-cases::-webkit-scrollbar-thumb {
+            background: rgba(0,0,0,0.12);
+            border-radius: 10px;
+        }
+
+        .test-cases h2 {
+            font-size: 1.6em;
+            margin-bottom: 12px;
+            color: #333;
+            border-bottom: 3px solid #455A64;
+            padding-bottom: 8px;
+        }
+        /* 缩小每条测试用例的高度/内边距以便在列表中显示更多条目 */
+        .test-case {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 10px 12px; /* 缩小内边距 */
+            margin-bottom: 8px;  /* 缩短条目间距 */
+            border-left: 5px solid #ddd;
+            transition: all 0.18s;
+            line-height: 1.25; /* 更紧凑的文本 */
+            font-size: 0.95em;
+        }
+        .test-case:hover {
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        }
+        .test-case.collapsed .test-case-content {
+            display: none;
+        }
+        .test-case-toggle {
+            background: none;
+            border: none;
+            font-size: 1em; /* 略小的折叠图标 */
+            cursor: pointer;
+            color: #667eea;
+            padding: 3px 6px; /* 更紧凑 */
+            margin-right: 8px;
+            transition: transform 0.18s;
+            vertical-align: middle;
+            line-height: 1;
+        }
+        .test-case-toggle:hover {
+            color: #5568d3;
+        }
+        .test-case-toggle.expanded {
+            transform: rotate(90deg);
+        }
+        .test-case-header-clickable {
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            user-select: none;
+        }
+        .test-case.passed {
+            border-left-color: #4CAF50;
+        }
+        .test-case.failed {
+            border-left-color: #F44336;
+        }
+        .test-case-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px; /* 缩短标题下间距 */
+        }
+        .test-case-header h3 {
+            font-size: 1.05em; /* 更小的标题，使单条高度更低 */
+            color: #333;
+            margin: 0;
+        }
+        .test-status {
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-weight: bold;
+            font-size: 0.9em;
+        }
+        .test-status.passed {
+            background: #4CAF50;
+            color: white;
+        }
+        .test-status.failed {
+            background: #F44336;
+            color: white;
+        }
+        .test-description {
+            color: #666;
+            margin-bottom: 10px;
+            font-size: 0.95em;
+        }
+        .test-steps {
+            margin-top: 15px;
+        }
+        .test-step {
+            padding: 10px;
+            margin: 5px 0;
+            border-radius: 5px;
+            background: white;
+            display: flex;
+            align-items: center;
+        }
+        .test-step.success {
+            border-left: 3px solid #4CAF50;
+        }
+        .test-step.failure {
+            border-left: 3px solid #F44336;
+        }
+        .test-step .step-icon {
+            margin-right: 10px;
+            font-size: 1.2em;
+        }
+        .screenshot {
+            margin-top: 15px;
+            padding: 15px;
+            background: white;
+            border-radius: 5px;
+        }
+        .screenshot img {
+            max-width: 100%;
+            border-radius: 5px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            cursor: pointer;
+            transition: transform 0.3s;
+        }
+        .screenshot img:hover {
+            transform: scale(1.02);
+        }
+        .error-message {
+            background: #ffebee;
+            border-left: 4px solid #F44336;
+            padding: 15px;
+            margin-top: 10px;
+            border-radius: 5px;
+            color: #c62828;
+            font-family: 'Courier New', monospace;
+        }
+        .footer {
+            text-align: center;
+            padding: 20px;
+            background: #f8f9fa;
+            color: #666;
+            border-top: 1px solid #ddd;
+        }
+        /* 历史趋势模块 */
+        .trend-module {
+            background: #ffffff;
+            border-radius: 10px;
+            padding: 18px;
+            margin: 20px 30px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.06);
+        }
+        .trend-module h2 {
+            font-size: 1.15em;
+            margin-bottom: 12px;
+            color: #333;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .trend-charts {
+            display: flex;
+            gap: 18px;
+            align-items: center;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+        .trend-charts img {
+            max-width: 100%;
+            height: auto;
+            border-radius: 8px;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+        }
+        .expand-btn {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 8px 15px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin-top: 10px;
+            font-size: 0.9em;
+        }
+        .expand-btn:hover {
+            background: #5568d3;
+        }
+        .steps-container {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease-out;
+        }
+        .steps-container.expanded {
+            max-height: 2000px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🎯 UI 自动化测试报告</h1>
+            <div class="subtitle">生成时间: 2025-11-02 18:44:34</div>
+        </div>
+        
+        <div class="stats">
+            <div class="stat-card total">
+                <div class="value">8</div>
+                <div class="label">总测试数</div>
+            </div>
+            <div class="stat-card passed">
+                <div class="value">3</div>
+                <div class="label">通过</div>
+            </div>
+            <div class="stat-card failed">
+                <div class="value">5</div>
+                <div class="label">失败</div>
+            </div>
+            <div class="stat-card duration">
+                <div class="value">283.3s</div>
+                <div class="label">总耗时</div>
+            </div>
+        </div>
+        
+        <div class="content-wrapper">
+            <div class="grid-container">
+                <!-- 左上：用例数量对比（柱状图） -->
+                <div class="grid-item">
+                    <div class="chart-section">
+                        <h3>用例数量对比（通过/失败/总计）</h3>
+                        <img src="test_trend_bar_20251102_184433.png" alt="用例数量对比">
+                    </div>
+                </div>
+
+                <!-- 右上：测试结果分布（饼图） -->
+                <div class="grid-item">
+                    <div class="chart-section">
+                            <h3>测试结果分布</h3>
+                            <img class="pie-image" src="test_chart_20251102_184433.png" alt="测试结果分布">
+                        </div>
+                </div>
+
+                <!-- 左下：执行耗时趋势（曲线图） -->
+                <div class="grid-item">
+                    <div class="chart-section">
+                        <h3>执行耗时趋势（秒）</h3>
+                        <img src="test_trend_time_20251102_184433.png" alt="执行耗时趋势">
+                    </div>
+                </div>
+
+                <!-- 右下：用例总数增长趋势 -->
+                <div class="grid-item">
+                    <div class="chart-section">
+                        <h3>用例总数增长趋势</h3>
+                        <img src="test_growth_20251102_184433.png" alt="用例增长曲线">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="test-cases">
+
+            <h2>测试用例列表</h2>
+
+            <div class="test-case passed " id="test-case-0">
+                <div class="test-case-header-clickable" onclick="toggleTestCase('test-case-0')">
+                    <button class="test-case-toggle expanded" id="toggle-test-case-0">▼</button>
+                    <div class="test-case-header" style="flex: 1;">
+                        <h3 style="display: inline;">冒烟测试 - 访问首页 <span style="color: #999; font-size: 0.8em;">(SMOKE001)</span></h3>
+                        <span class="test-status passed" style="float: right;">✅ 通过</span>
+                    </div>
+                </div>
+                <div class="test-case-content">
+                    <div class="test-description">
+                        📝 快速验证网站首页是否可访问
+                    </div>
+                    <div style="margin-top: 10px; color: #666;">
+                        ⏱️ 耗时: 13.66 秒
+                    </div>
+
+                    <button class="expand-btn" onclick="toggleSteps(this); event.stopPropagation();">展开/收起详细步骤</button>
+                    <div class="steps-container">
+                        <div class="test-steps">
+
+                            <div class="test-step success">
+                                <span class="step-icon">✅</span>
+                                <div>
+                                    <strong>步骤 1:</strong> 导航到 https://www.baidu.com<br>
+                                    <small style="color: #666;">已导航到 https://www.baidu.com</small>
+
+                            <div class="test-step success">
+                                <span class="step-icon">✅</span>
+                                <div>
+                                    <strong>步骤 2:</strong> 等待页面加载<br>
+                                    <small style="color: #666;">等待 3000ms</small>
+
+                            <div class="test-step success">
+                                <span class="step-icon">✅</span>
+                                <div>
+                                    <strong>步骤 3:</strong> 验证页面标题<br>
+                                    <small style="color: #666;">页面标题: 百度一下，你就知道</small>
+
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+
+            <div class="test-case passed " id="test-case-1">
+                <div class="test-case-header-clickable" onclick="toggleTestCase('test-case-1')">
+                    <button class="test-case-toggle expanded" id="toggle-test-case-1">▼</button>
+                    <div class="test-case-header" style="flex: 1;">
+                        <h3 style="display: inline;">冒烟测试 - 搜索功能 <span style="color: #999; font-size: 0.8em;">(SMOKE002)</span></h3>
+                        <span class="test-status passed" style="float: right;">✅ 通过</span>
+                    </div>
+                </div>
+                <div class="test-case-content">
+                    <div class="test-description">
+                        📝 快速验证搜索功能是否可用
+                    </div>
+                    <div style="margin-top: 10px; color: #666;">
+                        ⏱️ 耗时: 18.23 秒
+                    </div>
+
+                    <button class="expand-btn" onclick="toggleSteps(this); event.stopPropagation();">展开/收起详细步骤</button>
+                    <div class="steps-container">
+                        <div class="test-steps">
+
+                            <div class="test-step success">
+                                <span class="step-icon">✅</span>
+                                <div>
+                                    <strong>步骤 1:</strong> 导航到 https://www.baidu.com<br>
+                                    <small style="color: #666;">已导航到 https://www.baidu.com</small>
+
+                            <div class="test-step success">
+                                <span class="step-icon">✅</span>
+                                <div>
+                                    <strong>步骤 2:</strong> 等待页面加载<br>
+                                    <small style="color: #666;">等待 3000ms</small>
+
+                            <div class="test-step success">
+                                <span class="step-icon">✅</span>
+                                <div>
+                                    <strong>步骤 3:</strong> 找到搜索框并输入'Playwright'<br>
+                                    <small style="color: #666;">已在 input[name='wd'], input#kw 中输入 Playwright</small>
+
+                            <div class="test-step success">
+                                <span class="step-icon">✅</span>
+                                <div>
+                                    <strong>步骤 4:</strong> 点击搜索按钮<br>
+                                    <small style="color: #666;">已点击 input[type='submit'], button, #su</small>
+
+                            <div class="test-step success">
+                                <span class="step-icon">✅</span>
+                                <div>
+                                    <strong>步骤 5:</strong> 等待搜索结果加载<br>
+                                    <small style="color: #666;">等待 3000ms</small>
+
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+
+            <div class="test-case failed " id="test-case-2">
+                <div class="test-case-header-clickable" onclick="toggleTestCase('test-case-2')">
+                    <button class="test-case-toggle expanded" id="toggle-test-case-2">▼</button>
+                    <div class="test-case-header" style="flex: 1;">
+                        <h3 style="display: inline;">冒烟测试 - 登录功能 <span style="color: #999; font-size: 0.8em;">(SMOKE003)</span></h3>
+                        <span class="test-status failed" style="float: right;">❌ 失败</span>
+                    </div>
+                </div>
+                <div class="test-case-content">
+                    <div class="test-description">
+                        📝 快速验证登录功能是否可用
+                    </div>
+                    <div style="margin-top: 10px; color: #666;">
+                        ⏱️ 耗时: 51.37 秒
+                    </div>
+
+                    <div class="error-message">
+                        <strong>错误信息:</strong><br>
+                        Page.click: Timeout 30000ms exceeded.
+Call log:
+  - waiting for locator("input[type='submit'], button, #su")
+
+                    </div>
+
+                    <button class="expand-btn" onclick="toggleSteps(this); event.stopPropagation();">展开/收起详细步骤</button>
+                    <div class="steps-container">
+                        <div class="test-steps">
+
+                            <div class="test-step success">
+                                <span class="step-icon">✅</span>
+                                <div>
+                                    <strong>步骤 1:</strong> 导航到 https://example.com/login<br>
+                                    <small style="color: #666;">已导航到 https://example.com/login</small>
+
+                            <div class="test-step success">
+                                <span class="step-icon">✅</span>
+                                <div>
+                                    <strong>步骤 2:</strong> 等待页面加载<br>
+                                    <small style="color: #666;">等待 3000ms</small>
+
+                            <div class="test-step success">
+                                <span class="step-icon">✅</span>
+                                <div>
+                                    <strong>步骤 3:</strong> 找到用户名和密码输入框并输入有效凭据<br>
+                                    <small style="color: #666;">步骤执行完成</small>
+
+                            <div class="test-step failure">
+                                <span class="step-icon">❌</span>
+                                <div>
+                                    <strong>步骤 4:</strong> 点击登录按钮<br>
+                                    <small style="color: #666;">None</small>
+
+                                    <div style="color: #F44336; margin-top: 5px;">
+                                        ⚠️ Page.click: Timeout 30000ms exceeded.
+Call log:
+  - waiting for locator("input[type='submit'], button, #su")
+
+                                    </div>
+
+                                </div>
+                            </div>
+
+                        </div>
+                    </div>
+
+                    <div class="screenshot">
+                        <h4 style="margin-bottom: 10px; color: #C62828;">失败截图:</h4>
+                        <img src="screenshots/SMOKE003_20251102_184059.png" alt="失败截图" onclick="window.open(this.src, '_blank')">
+                    </div>
+
+                </div>
+            </div>
+
+            <div class="test-case failed " id="test-case-3">
+                <div class="test-case-header-clickable" onclick="toggleTestCase('test-case-3')">
+                    <button class="test-case-toggle expanded" id="toggle-test-case-3">▼</button>
+                    <div class="test-case-header" style="flex: 1;">
+                        <h3 style="display: inline;">冒烟测试 - 注册功能 <span style="color: #999; font-size: 0.8em;">(SMOKE004)</span></h3>
+                        <span class="test-status failed" style="float: right;">❌ 失败</span>
+                    </div>
+                </div>
+                <div class="test-case-content">
+                    <div class="test-description">
+                        📝 快速验证注册功能是否可用
+                    </div>
+                    <div style="margin-top: 10px; color: #666;">
+                        ⏱️ 耗时: 52.09 秒
+                    </div>
+
+                    <div class="error-message">
+                        <strong>错误信息:</strong><br>
+                        Page.click: Timeout 30000ms exceeded.
+Call log:
+  - waiting for locator("input[type='submit'], button, #su")
+
+                    </div>
+
+                    <button class="expand-btn" onclick="toggleSteps(this); event.stopPropagation();">展开/收起详细步骤</button>
+                    <div class="steps-container">
+                        <div class="test-steps">
+
+                            <div class="test-step success">
+                                <span class="step-icon">✅</span>
+                                <div>
+                                    <strong>步骤 1:</strong> 导航到 https://example.com/register<br>
+                                    <small style="color: #666;">已导航到 https://example.com/register</small>
+
+                            <div class="test-step success">
+                                <span class="step-icon">✅</span>
+                                <div>
+                                    <strong>步骤 2:</strong> 等待页面加载<br>
+                                    <small style="color: #666;">等待 3000ms</small>
+
+                            <div class="test-step success">
+                                <span class="step-icon">✅</span>
+                                <div>
+                                    <strong>步骤 3:</strong> 找到注册表单并输入有效信息<br>
+                                    <small style="color: #666;">步骤执行完成</small>
+
+                            <div class="test-step failure">
+                                <span class="step-icon">❌</span>
+                                <div>
+                                    <strong>步骤 4:</strong> 点击注册按钮<br>
+                                    <small style="color: #666;">None</small>
+
+                                    <div style="color: #F44336; margin-top: 5px;">
+                                        ⚠️ Page.click: Timeout 30000ms exceeded.
+Call log:
+  - waiting for locator("input[type='submit'], button, #su")
+
+                                    </div>
+
+                                </div>
+                            </div>
+
+                        </div>
+                    </div>
+
+                    <div class="screenshot">
+                        <h4 style="margin-bottom: 10px; color: #C62828;">失败截图:</h4>
+                        <img src="screenshots/SMOKE004_20251102_184153.png" alt="失败截图" onclick="window.open(this.src, '_blank')">
+                    </div>
+
+                </div>
+            </div>
+
+            <div class="test-case failed " id="test-case-4">
+                <div class="test-case-header-clickable" onclick="toggleTestCase('test-case-4')">
+                    <button class="test-case-toggle expanded" id="toggle-test-case-4">▼</button>
+                    <div class="test-case-header" style="flex: 1;">
+                        <h3 style="display: inline;">冒烟测试 - 忘记密码功能 <span style="color: #999; font-size: 0.8em;">(SMOKE005)</span></h3>
+                        <span class="test-status failed" style="float: right;">❌ 失败</span>
+                    </div>
+                </div>
+                <div class="test-case-content">
+                    <div class="test-description">
+                        📝 快速验证忘记密码功能是否可用
+                    </div>
+                    <div style="margin-top: 10px; color: #666;">
+                        ⏱️ 耗时: 47.55 秒
+                    </div>
+
+                    <div class="error-message">
+                        <strong>错误信息:</strong><br>
+                        Page.click: Timeout 30000ms exceeded.
+Call log:
+  - waiting for locator("input[type='submit'], button, #su")
+
+                    </div>
+
+                    <button class="expand-btn" onclick="toggleSteps(this); event.stopPropagation();">展开/收起详细步骤</button>
+                    <div class="steps-container">
+                        <div class="test-steps">
+
+                            <div class="test-step success">
+                                <span class="step-icon">✅</span>
+                                <div>
+                                    <strong>步骤 1:</strong> 导航到 https://example.com/forgot-password<br>
+                                    <small style="color: #666;">已导航到 https://example.com/forgot-password</small>
+
+                            <div class="test-step success">
+                                <span class="step-icon">✅</span>
+                                <div>
+                                    <strong>步骤 2:</strong> 等待页面加载<br>
+                                    <small style="color: #666;">等待 3000ms</small>
+
+                            <div class="test-step success">
+                                <span class="step-icon">✅</span>
+                                <div>
+                                    <strong>步骤 3:</strong> 找到忘记密码表单并输入有效信息<br>
+                                    <small style="color: #666;">步骤执行完成</small>
+
+                            <div class="test-step failure">
+                                <span class="step-icon">❌</span>
+                                <div>
+                                    <strong>步骤 4:</strong> 点击发送按钮<br>
+                                    <small style="color: #666;">None</small>
+
+                                    <div style="color: #F44336; margin-top: 5px;">
+                                        ⚠️ Page.click: Timeout 30000ms exceeded.
+Call log:
+  - waiting for locator("input[type='submit'], button, #su")
+
+                                    </div>
+
+                                </div>
+                            </div>
+
+                        </div>
+                    </div>
+
+                    <div class="screenshot">
+                        <h4 style="margin-bottom: 10px; color: #C62828;">失败截图:</h4>
+                        <img src="screenshots/SMOKE005_20251102_184243.png" alt="失败截图" onclick="window.open(this.src, '_blank')">
+                    </div>
+
+                </div>
+            </div>
+
+            <div class="test-case failed " id="test-case-5">
+                <div class="test-case-header-clickable" onclick="toggleTestCase('test-case-5')">
+                    <button class="test-case-toggle expanded" id="toggle-test-case-5">▼</button>
+                    <div class="test-case-header" style="flex: 1;">
+                        <h3 style="display: inline;">冒烟测试 - 激活账户功能 <span style="color: #999; font-size: 0.8em;">(SMOKE006)</span></h3>
+                        <span class="test-status failed" style="float: right;">❌ 失败</span>
+                    </div>
+                </div>
+                <div class="test-case-content">
+                    <div class="test-description">
+                        📝 快速验证激活账户功能是否可用
+                    </div>
+                    <div style="margin-top: 10px; color: #666;">
+                        ⏱️ 耗时: 46.99 秒
+                    </div>
+
+                    <div class="error-message">
+                        <strong>错误信息:</strong><br>
+                        Page.click: Timeout 30000ms exceeded.
+Call log:
+  - waiting for locator("input[type='submit'], button, #su")
+
+                    </div>
+
+                    <button class="expand-btn" onclick="toggleSteps(this); event.stopPropagation();">展开/收起详细步骤</button>
+                    <div class="steps-container">
+                        <div class="test-steps">
+
+                            <div class="test-step success">
+                                <span class="step-icon">✅</span>
+                                <div>
+                                    <strong>步骤 1:</strong> 导航到 https://example.com/activate<br>
+                                    <small style="color: #666;">已导航到 https://example.com/activate</small>
+
+                            <div class="test-step success">
+                                <span class="step-icon">✅</span>
+                                <div>
+                                    <strong>步骤 2:</strong> 等待页面加载<br>
+                                    <small style="color: #666;">等待 3000ms</small>
+
+                            <div class="test-step success">
+                                <span class="step-icon">✅</span>
+                                <div>
+                                    <strong>步骤 3:</strong> 找到激活账户表单并输入有效信息<br>
+                                    <small style="color: #666;">步骤执行完成</small>
+
+                            <div class="test-step failure">
+                                <span class="step-icon">❌</span>
+                                <div>
+                                    <strong>步骤 4:</strong> 点击激活按钮<br>
+                                    <small style="color: #666;">None</small>
+
+                                    <div style="color: #F44336; margin-top: 5px;">
+                                        ⚠️ Page.click: Timeout 30000ms exceeded.
+Call log:
+  - waiting for locator("input[type='submit'], button, #su")
+
+                                    </div>
+
+                                </div>
+                            </div>
+
+                        </div>
+                    </div>
+
+                    <div class="screenshot">
+                        <h4 style="margin-bottom: 10px; color: #C62828;">失败截图:</h4>
+                        <img src="screenshots/SMOKE006_20251102_184333.png" alt="失败截图" onclick="window.open(this.src, '_blank')">
+                    </div>
+
+                </div>
+            </div>
+
+            <div class="test-case passed " id="test-case-6">
+                <div class="test-case-header-clickable" onclick="toggleTestCase('test-case-6')">
+                    <button class="test-case-toggle expanded" id="toggle-test-case-6">▼</button>
+                    <div class="test-case-header" style="flex: 1;">
+                        <h3 style="display: inline;">访问百度首页 <span style="color: #999; font-size: 0.8em;">(TC001)</span></h3>
+                        <span class="test-status passed" style="float: right;">✅ 通过</span>
+                    </div>
+                </div>
+                <div class="test-case-content">
+                    <div class="test-description">
+                        📝 打开百度网站首页，验证页面标题包含'百度'
+                    </div>
+                    <div style="margin-top: 10px; color: #666;">
+                        ⏱️ 耗时: 13.24 秒
+                    </div>
+
+                    <button class="expand-btn" onclick="toggleSteps(this); event.stopPropagation();">展开/收起详细步骤</button>
+                    <div class="steps-container">
+                        <div class="test-steps">
+
+                            <div class="test-step success">
+                                <span class="step-icon">✅</span>
+                                <div>
+                                    <strong>步骤 1:</strong> 导航到 https://www.baidu.com<br>
+                                    <small style="color: #666;">已导航到 https://www.baidu.com</small>
+
+                            <div class="test-step success">
+                                <span class="step-icon">✅</span>
+                                <div>
+                                    <strong>步骤 2:</strong> 验证页面标题包含'百度'<br>
+                                    <small style="color: #666;">页面标题: 百度一下，你就知道</small>
+
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+
+            <div class="test-case failed " id="test-case-7">
+                <div class="test-case-header-clickable" onclick="toggleTestCase('test-case-7')">
+                    <button class="test-case-toggle expanded" id="toggle-test-case-7">▼</button>
+                    <div class="test-case-header" style="flex: 1;">
+                        <h3 style="display: inline;">百度搜索功能测试 <span style="color: #999; font-size: 0.8em;">(TC002)</span></h3>
+                        <span class="test-status failed" style="float: right;">❌ 失败</span>
+                    </div>
+                </div>
+                <div class="test-case-content">
+                    <div class="test-description">
+                        📝 在百度搜索框中输入'Playwright'并搜索，验证搜索结果页面
+                    </div>
+                    <div style="margin-top: 10px; color: #666;">
+                        ⏱️ 耗时: 40.19 秒
+                    </div>
+
+                    <div class="error-message">
+                        <strong>错误信息:</strong><br>
+                        Page.fill: Timeout 30000ms exceeded.
+Call log:
+  - waiting for locator("input[name='wd'], input#kw")
+    - locator resolved to <input id="kw" value="" name="wd" class="s_ipt" maxlength="255" autocomplete="off" placeholder="中央部委:现房将全面推行"/>
+    - fill("Playwright")
+  - attempting fill action
+    2 × waiting for element to be visible, enabled and editable
+      - element is not visible
+    - retrying fill action
+    - waiting 20ms
+    2 × waiting for element to be visible, enabled and editable
+      - element is not visible
+    - retrying fill action
+      - waiting 100ms
+    58 × waiting for element to be visible, enabled and editable
+       - element is not visible
+     - retrying fill action
+       - waiting 500ms
+
+                    </div>
+
+                    <button class="expand-btn" onclick="toggleSteps(this); event.stopPropagation();">展开/收起详细步骤</button>
+                    <div class="steps-container">
+                        <div class="test-steps">
+
+                            <div class="test-step success">
+                                <span class="step-icon">✅</span>
+                                <div>
+                                    <strong>步骤 1:</strong> 导航到 https://www.baidu.com<br>
+                                    <small style="color: #666;">已导航到 https://www.baidu.com</small>
+
+                            <div class="test-step failure">
+                                <span class="step-icon">❌</span>
+                                <div>
+                                    <strong>步骤 2:</strong> 找到搜索框并输入'Playwright'<br>
+                                    <small style="color: #666;">None</small>
+
+                                    <div style="color: #F44336; margin-top: 5px;">
+                                        ⚠️ Page.fill: Timeout 30000ms exceeded.
+Call log:
+  - waiting for locator("input[name='wd'], input#kw")
+    - locator resolved to <input id="kw" value="" name="wd" class="s_ipt" maxlength="255" autocomplete="off" placeholder="中央部委:现房将全面推行"/>
+    - fill("Playwright")
+  - attempting fill action
+    2 × waiting for element to be visible, enabled and editable
+      - element is not visible
+    - retrying fill action
+    - waiting 20ms
+    2 × waiting for element to be visible, enabled and editable
+      - element is not visible
+    - retrying fill action
+      - waiting 100ms
+    58 × waiting for element to be visible, enabled and editable
+       - element is not visible
+     - retrying fill action
+       - waiting 500ms
+
+                                    </div>
+
+                                </div>
+                            </div>
+
+                        </div>
+                    </div>
+
+                    <div class="screenshot">
+                        <h4 style="margin-bottom: 10px; color: #C62828;">失败截图:</h4>
+                        <img src="screenshots/TC002_20251102_184430.png" alt="失败截图" onclick="window.open(this.src, '_blank')">
+                    </div>
+
+                </div>
+            </div>
+
+        </div>
+
+        <div class="footer">
+            <p>由 Playwright MCP + DeepSeek 自动生成</p>
+        </div>
+    </div>
+    
+    <script>
+        function toggleSteps(btn) {
+            const container = btn.nextElementSibling;
+            container.classList.toggle('expanded');
+        }
+        
+        function toggleTestCase(caseId) {
+            const testCase = document.getElementById(caseId);
+            const toggle = document.getElementById('toggle-' + caseId);
+            
+            if (testCase.classList.contains('collapsed')) {
+                testCase.classList.remove('collapsed');
+                toggle.classList.add('expanded');
+                toggle.textContent = '▼';
+            } else {
+                testCase.classList.add('collapsed');
+                toggle.classList.remove('expanded');
+                toggle.textContent = '▶';
+            }
+        }
+    </script>
+</body>
+</html>
