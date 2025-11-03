@@ -444,10 +444,10 @@ class ReportGenerator:
             object-fit: cover; /* 填充格子，可能裁剪以保持视觉一致 */
             display: block;
         }}
-        /* 将饼图缩小为当前尺寸的 2/3，居中显示且不被裁剪 */
+        /* 将饼图缩小为当前尺寸的 1/2，居中显示且不被裁剪 */
         .chart-section .pie-image {{
-            width: 45%;
-            height: 45%;
+            width: 50%;
+            height: 50%;
             margin: auto;
             object-fit: contain; /* 保持完整图像，不裁剪 */
             display: block;
@@ -746,75 +746,72 @@ class ReportGenerator:
 """
 
         # 为了将测试用例列表放到页面底部，先在单独变量中构建 HTML
+        # 只显示前5条，剩余的可滚动查看
+        max_visible = 5
         test_cases_html = f"""
         <div class=\"test-cases\">\n
             <h2>测试用例列表</h2>
 """
-
-        # 添加测试用例详情到 test_cases_html
         for idx, result in enumerate(test_results):
+            if idx == max_visible:
+                test_cases_html += '<div id="more-cases" style="display:none">'
             status_class = "passed" if result.get("success") else "failed"
             status_text = "✅ 通过" if result.get("success") else "❌ 失败"
             status_bg = "passed" if result.get("success") else "failed"
             case_id = f"test-case-{idx}"
-
-            # 将所有测试用例默认全部展开，确保页面底部显示完整列表
-            collapsed_class = ""
-            toggle_text = '▼'
-            toggle_expanded_cls = 'expanded'
-
+            collapsed_class = "collapsed"
+            toggle_text = '▶'
+            toggle_expanded_cls = ''
             test_cases_html += f"""
-            <div class="test-case {status_class} {collapsed_class}" id="{case_id}">
-                <div class="test-case-header-clickable" onclick="toggleTestCase('{case_id}')">
-                    <button class="test-case-toggle {toggle_expanded_cls}" id="toggle-{case_id}">{toggle_text}</button>
-                    <div class="test-case-header" style="flex: 1;">
-                        <h3 style="display: inline;">{result.get('name', '未命名测试')} <span style="color: #999; font-size: 0.8em;">({result.get('id', 'N/A')})</span></h3>
-                        <span class="test-status {status_bg}" style="float: right;">{status_text}</span>
+            <div class=\"test-case {status_class} {collapsed_class}\" id=\"{case_id}\">
+                <div class=\"test-case-header-clickable\" onclick=\"toggleTestCase('{case_id}')">
+                    <button class=\"test-case-toggle {toggle_expanded_cls}\" id=\"toggle-{case_id}\">{toggle_text}</button>
+                    <div class=\"test-case-header\" style=\"flex: 1;\">
+                        <h3 style=\"display: inline;\">{result.get('name', '未命名测试')} <span style=\"color: #999; font-size: 0.8em;\">({result.get('id', 'N/A')})</span></h3>
+                        <span class=\"test-status {status_bg}\" style=\"float: right;\">{status_text}</span>
                     </div>
                 </div>
-                <div class="test-case-content">
-                    <div class="test-description">
+                <div class=\"test-case-content\">
+                    <div class=\"test-description\">
                         📝 {result.get('description', '无描述')}
                     </div>
-                    <div style="margin-top: 10px; color: #666;">
+                    <div style=\"margin-top: 10px; color: #666;\">
                         ⏱️ 耗时: {result.get('duration', 0):.2f} 秒
                     </div>
 """
-            
             # 错误信息
             if result.get("error"):
                 test_cases_html += f"""
-                    <div class="error-message">
+                    <div class=\"error-message\">
                         <strong>错误信息:</strong><br>
                         {result.get('error')}
                     </div>
 """
-            
             # 测试步骤
             steps = result.get("steps", [])
             if steps:
                 test_cases_html += """
-                    <button class="expand-btn" onclick="toggleSteps(this); event.stopPropagation();">展开/收起详细步骤</button>
-                    <div class="steps-container">
-                        <div class="test-steps">
+                    <button class=\"expand-btn\" onclick=\"toggleSteps(this); event.stopPropagation();\">展开/收起详细步骤</button>
+                    <div class=\"steps-container\">
+                        <div class=\"test-steps\">
 """
                 for step in steps:
                     step_class = "success" if step.get("success") else "failure"
                     step_icon = "✅" if step.get("success") else "❌"
                     test_cases_html += f"""
-                            <div class="test-step {step_class}">
-                                <span class="step-icon">{step_icon}</span>
+                            <div class=\"test-step {step_class}\">
+                                <span class=\"step-icon\">{step_icon}</span>
                                 <div>
                                     <strong>步骤 {step.get('step', 'N/A')}:</strong> {step.get('description', 'N/A')}<br>
-                                    <small style="color: #666;">{step.get('message', '')}</small>
+                                    <small style=\"color: #666;\">{step.get('message', '')}</small>
 """
                     if step.get("error"):
                         test_cases_html += f"""
-                                    <div style="color: #F44336; margin-top: 5px;">
+                                    <div style=\"color: #F44336; margin-top: 5px;\">
                                         ⚠️ {step.get('error')}
                                     </div>
 """
-                        test_cases_html += """
+                    test_cases_html += """
                                 </div>
                             </div>
 """
@@ -822,9 +819,6 @@ class ReportGenerator:
                         </div>
                     </div>
 """
-            
-            # 失败截图
-            screenshot = result.get("screenshot")
             # 失败截图
             screenshot = result.get("screenshot")
             if screenshot and not result.get("success"):
@@ -835,35 +829,30 @@ class ReportGenerator:
                         <img src=\"{screenshot_full_path}\" alt=\"失败截图\" onclick=\"window.open(this.src, '_blank')\">
                     </div>
 """
-            
             test_cases_html += """
                 </div>
             </div>
 """
-
-        # 追加测试用例列表到底部
+        if len(test_results) > max_visible:
+            test_cases_html += '</div>'
+            test_cases_html += f'<button class="expand-btn" onclick="document.getElementById(\'more-cases\').style.display=\'block\'; this.style.display=\'none\';">查看更多测试用例</button>'
         test_cases_html += """
         </div>
 """
-
         html_content += test_cases_html
-
         html_content += """
         <div class=\"footer\">
             <p>由 Playwright MCP + DeepSeek 自动生成</p>
         </div>
     </div>
-    
     <script>
         function toggleSteps(btn) {
             const container = btn.nextElementSibling;
             container.classList.toggle('expanded');
         }
-        
         function toggleTestCase(caseId) {
             const testCase = document.getElementById(caseId);
             const toggle = document.getElementById('toggle-' + caseId);
-            
             if (testCase.classList.contains('collapsed')) {
                 testCase.classList.remove('collapsed');
                 toggle.classList.add('expanded');
@@ -878,12 +867,9 @@ class ReportGenerator:
 </body>
 </html>
 """
-        
         # 保存 HTML 文件
         html_filename = f"test_report_{timestamp}.html"
         html_path = self.reports_dir / html_filename
-        
         with open(html_path, 'w', encoding='utf-8') as f:
             f.write(html_content)
-        
         return html_path

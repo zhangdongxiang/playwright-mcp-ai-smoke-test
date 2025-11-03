@@ -85,7 +85,9 @@ class DeepSeekClient(AIClientBase):
             temperature=temperature
         )
         return response.choices[0].message.content
-
+    async def close(self):
+        """关闭客户端连接"""
+        await self.client.close()
 
 class QwenClient(AIClientBase):
     """通义千问 (Qwen) 客户端
@@ -95,12 +97,17 @@ class QwenClient(AIClientBase):
     """
     
     def __init__(self, api_key: str, model: str = "qwen-turbo"):
-        if dashscope is None:
-            raise ImportError("请安装 dashscope 包: pip install dashscope")
-        
-        dashscope.api_key = api_key
+        # 兼容 dashscope OpenAI 接口
+        try:
+            from openai import AsyncOpenAI
+        except ImportError:
+            raise ImportError("请安装 openai 包: pip install openai")
+        self.client = AsyncOpenAI(
+            api_key=api_key,
+            base_url="https://dashscope.aliyuncs.com/compatible-mode/v1"
+        )
         self.model = model
-    
+
     async def chat_completion(
         self,
         messages: List[Dict[str, str]],
@@ -108,36 +115,18 @@ class QwenClient(AIClientBase):
         temperature: float = 0.3
     ) -> str:
         """
-        调用通义千问 API
-        
+        调用通义千问 API (OpenAI兼容模式)
         Author: Dongxiang.Zhang
         Email: dongxiang699@163.com
         """
-        import asyncio
-        
-        # 转换消息格式
-        qwen_messages = []
-        for msg in messages:
-            qwen_messages.append({
-                "role": msg["role"],
-                "content": msg["content"]
-            })
-        
-        # 同步调用（dashscope 目前主要支持同步）
-        def sync_call():
-            response = Generation.call(
-                model=model or self.model,
-                messages=qwen_messages,
-                temperature=temperature
-            )
-            if response.status_code == 200:
-                return response.output.choices[0].message.content
-            else:
-                raise Exception(f"通义千问 API 错误: {response.message}")
-        
-        # 在线程池中执行同步调用
-        loop = asyncio.get_event_loop()
-        return await loop.run_in_executor(None, sync_call)
+        # OpenAI Python SDK 兼容调用
+        completion = await self.client.chat.completions.create(
+            model=model or self.model,
+            messages=messages,
+            temperature=temperature
+        )
+        # 返回内容
+        return completion.choices[0].message.content
 
 
 class CopilotClient(AIClientBase):
