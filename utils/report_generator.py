@@ -13,6 +13,7 @@ import matplotlib
 matplotlib.use('Agg')  # 使用非交互式后端
 import matplotlib.pyplot as plt
 from matplotlib import font_manager
+import os
 
 # 设置中文字体
 plt.rcParams['font.sans-serif'] = ['SimHei', 'Microsoft YaHei', 'Arial Unicode MS']
@@ -365,6 +366,14 @@ class ReportGenerator:
         failed = total - passed
         total_duration = sum(r.get("duration", 0) for r in test_results)
         avg_duration = total_duration / total if total > 0 else 0
+        # 页脚 AI 提供商展示
+        ai_provider = os.getenv("AI_PROVIDER", "deepseek").lower()
+        provider_display = {
+            "deepseek": "DeepSeek",
+            "qwen": "通义千问 Qwen",
+            "copilot": "GitHub Copilot",
+            "openai": "OpenAI",
+        }.get(ai_provider, ai_provider)
         
         # 生成 HTML
         html_content = f"""<!DOCTYPE html>
@@ -988,11 +997,14 @@ class ReportGenerator:
         </div>
 """
         html_content += test_cases_html
+        footer_html = (
+            "        <div class=\"footer\">\n\n"
+            f"            <p>由 Playwright MCP + {provider_display} 自动生成</p>\n\n"
+            "        </div>\n"
+            "    </div>\n"
+        )
+        html_content += footer_html
         html_content += """
-        <div class=\"footer\">
-            <p>由 Playwright MCP + DeepSeek 自动生成</p>
-        </div>
-    </div>
     <script>
         function toggleSteps(btn) {
             const container = btn.nextElementSibling;
