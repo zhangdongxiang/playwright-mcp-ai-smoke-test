@@ -44,10 +44,10 @@ if not exist ".env" (
 
 REM 检查 Playwright 浏览器
 echo [3/4] 检查 Playwright 浏览器...
-python -c "from playwright.sync_api import sync_playwright; sync_playwright().start().chromium.launch(headless=True).close()" >nul 2>&1
+python -c "from playwright.sync_api import sync_playwright; p=sync_playwright().start(); b=p.chromium.launch(headless=True); b.close(); p.stop()" >nul 2>&1
 if errorlevel 1 (
     echo [警告] Playwright 浏览器未安装，正在安装...
-    playwright install chromium
+    python -m playwright install chromium >nul 2>&1
     if errorlevel 1 (
         echo [错误] Playwright 浏览器安装失败
         pause

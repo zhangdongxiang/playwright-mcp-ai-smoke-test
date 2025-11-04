@@ -467,6 +467,12 @@ class PlaywrightMCPTestRunner:
         
         finally:
             await self.close_browser()
+            # 关闭 AI 客户端连接
+            if hasattr(self.ai_client, 'close') and callable(getattr(self.ai_client, 'close', None)):
+                try:
+                    await self.ai_client.close()
+                except Exception:
+                    pass  # 忽略关闭时的错误
         
         # 生成报告
         self.report_generator.generate_report(self.test_results)
