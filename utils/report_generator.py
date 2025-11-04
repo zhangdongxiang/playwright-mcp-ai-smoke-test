@@ -56,12 +56,41 @@ class ReportGenerator:
         total_duration = sum(r.get("duration", 0) for r in test_results)
         self._save_summary(timestamp, total, passed, failed, total_duration)
 
-        # 生成趋势图（从历史摘要中读取）和增长趋势图（总用例数随时间变化）
-        bar_chart_path, time_chart_path = self._generate_trend_chart(timestamp)
-        growth_chart_path = self._generate_growth_chart(timestamp)
+        # 收集历史摘要数据用于 ECharts 渲染
+        summaries = self._read_summaries()
+        labels = []
+        history_passed = []
+        history_failed = []
+        history_totals = []
+        history_durations = []
+        for s in summaries:
+            ts = s.get('timestamp', '')
+            parts = ts.split('_') if '_' in ts else [ts]
+            short_label = parts[0][-6:]
+            if len(parts) > 1:
+                short_label += '\n' + parts[1][:4]
+            labels.append(short_label)
+            history_passed.append(s.get('passed', 0))
+            history_failed.append(s.get('failed', 0))
+            history_totals.append(s.get('total', 0))
+            history_durations.append(round(float(s.get('duration', 0)), 2))
 
-        # 生成 HTML 报告（传入柱状图、时间曲线与增长曲线）
-        html_path = self._generate_html_report(test_results, bar_chart_path, time_chart_path, growth_chart_path, pie_chart_path, timestamp)
+        growth_labels = [s.get('timestamp', '') for s in summaries]
+        growth_totals = [s.get('total', 0) for s in summaries]
+
+        # 生成 HTML 报告（ECharts 交互图表）
+        html_path = self._generate_html_report(
+            test_results=test_results,
+            pie_chart_path=pie_chart_path,
+            timestamp=timestamp,
+            history_labels=labels,
+            history_passed=history_passed,
+            history_failed=history_failed,
+            history_totals=history_totals,
+            history_durations=history_durations,
+            growth_labels=growth_labels,
+            growth_totals=growth_totals,
+        )
 
         print(f"📊 测试报告已生成: {html_path}")
 
@@ -228,7 +257,13 @@ class ReportGenerator:
         ax2.set_title('执行耗时趋势 (秒)')
         ax2.set_xticks(x)
         ax2.set_xticklabels(labels)
+        # 显示清晰的纵坐标：添加标签、设置下限为 0，并略微加大左边距避免被裁剪
+        ax2.set_ylabel('秒')
+        ax2.set_ylim(bottom=0)
+        ax2.tick_params(axis='y', labelsize=9)
         ax2.grid(True, linestyle='--', alpha=0.3)
+        # 为确保 y 轴刻度完全可见，稍微扩大左边距
+        fig2.subplots_adjust(left=0.12)
         plt.tight_layout()
         time_filename = f"test_trend_time_{timestamp}.png"
         time_path = self.reports_dir / time_filename
@@ -282,15 +317,33 @@ class ReportGenerator:
         plt.close()
 
         return growth_filename
+
+    def _read_summaries(self) -> List[Dict[str, Any]]:
+        """
+        读取 reports 目录下的历史摘要，按文件名排序返回。
+        """
+        summaries: List[Dict[str, Any]] = []
+        for p in sorted(self.reports_dir.glob('test_summary_*.json')):
+            try:
+                with open(p, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                    summaries.append(data)
+            except Exception:
+                continue
+        return summaries
     
     def _generate_html_report(
         self,
         test_results: List[Dict[str, Any]],
-        bar_chart_path: str,
-        time_chart_path: str,
-        growth_chart_path: str,
         pie_chart_path: str,
-        timestamp: str
+        timestamp: str,
+        history_labels: List[str],
+        history_passed: List[int],
+        history_failed: List[int],
+        history_totals: List[int],
+        history_durations: List[float],
+        growth_labels: List[str],
+        growth_totals: List[int],
     ) -> Path:
         """
         生成 HTML 报告
@@ -398,8 +451,8 @@ class ReportGenerator:
             padding: 10px 0;
         }}
         .grid-item .chart-section {{
-            height: 100%;
-            min-height: 240px;
+            height: 320px; /* 统一四个图表的显示高度 */
+            min-height: 320px;
         }}
         /* 图表行：左侧主图（饼图+趋势），右侧为增长曲线 */
         .chart-row {{
@@ -429,19 +482,42 @@ class ReportGenerator:
             /* 使用 flex 布局以便图片可以填充剩余空间 */
             display: flex;
             flex-direction: column;
-            padding: 0; /* 移除内边距以便图片平铺 */
+            padding: 12px; /* 为图片边缘留白，避免刻度被裁剪 */
             background: #f3f4f6; /* 更柔和的浅灰背景 */
             border-radius: 10px;
             box-shadow: 0 6px 18px rgba(0,0,0,0.04);
             overflow: hidden;
+            position: relative; /* 便于放置最大化按钮 */
+        }}
+        .chart-section.fullscreen {{
+            position: fixed;
+            inset: 10px;
+            width: calc(100vw - 20px);
+            height: calc(100vh - 20px);
+            z-index: 10000;
+            background: #ffffff;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+        }}
+        .max-btn {{
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            padding: 4px 8px;
+            border: none;
+            border-radius: 6px;
+            background: #667eea;
+            color: #fff;
+            cursor: pointer;
+            font-size: 12px;
+            z-index: 2;
         }}
         /* 图片延伸到容器左右对齐 */
         /* 图片平铺：占满格子剩余空间 */
         .chart-section img, .trend-under img, .chart-side img {{
             width: 100%;
-            height: 100%;
-            flex: 1 1 auto;
-            object-fit: cover; /* 填充格子，可能裁剪以保持视觉一致 */
+            height: 100%; /* 填充容器剩余空间，保持统一高度 */
+            flex: 1 1 auto; /* 图片占据除标题外空间 */
+            object-fit: contain; /* 完整展示图表，确保坐标轴不被裁剪 */
             display: block;
         }}
         /* 将饼图缩小为当前尺寸的 1/2，居中显示且不被裁剪 */
@@ -712,37 +788,109 @@ class ReportGenerator:
             <div class="grid-container">
                 <!-- 左上：用例数量对比（柱状图） -->
                 <div class="grid-item">
-                    <div class="chart-section">
+                    <div class="chart-section" id=\"barChartBox\">
                         <h3>用例数量对比（通过/失败/总计）</h3>
-                        <img src="{bar_chart_path}" alt="用例数量对比">
+                        <button class=\"max-btn\" onclick=\"toggleFullscreen('barChartBox','barChart')\">⤢</button>
+                        <div id=\"barChart\" style=\"width:100%; flex:1 1 auto;\"></div>
                     </div>
                 </div>
 
                 <!-- 右上：测试结果分布（饼图） -->
                 <div class="grid-item">
-                    <div class="chart-section">
+                    <div class="chart-section" id=\"pieChartBox\">
                             <h3>测试结果分布</h3>
-                            <img class="pie-image" src="{pie_chart_path}" alt="测试结果分布">
+                            <button class=\"max-btn\" onclick=\"toggleFullscreen('pieChartBox','pieChart')\">⤢</button>
+                            <div id=\"pieChart\" style=\"width:100%; flex:1 1 auto;\"></div>
                         </div>
                 </div>
 
                 <!-- 左下：执行耗时趋势（曲线图） -->
                 <div class="grid-item">
-                    <div class="chart-section">
+                    <div class="chart-section" id=\"timeChartBox\">
                         <h3>执行耗时趋势（秒）</h3>
-                        <img src="{time_chart_path}" alt="执行耗时趋势">
+                        <button class=\"max-btn\" onclick=\"toggleFullscreen('timeChartBox','timeChart')\">⤢</button>
+                        <div id=\"timeChart\" style=\"width:100%; flex:1 1 auto;\"></div>
                     </div>
                 </div>
 
                 <!-- 右下：用例总数增长趋势 -->
                 <div class="grid-item">
-                    <div class="chart-section">
+                    <div class="chart-section" id=\"growthChartBox\">
                         <h3>用例总数增长趋势</h3>
-                        <img src="{growth_chart_path}" alt="用例增长曲线">
+                        <button class=\"max-btn\" onclick=\"toggleFullscreen('growthChartBox','growthChart')\">⤢</button>
+                        <div id=\"growthChart\" style=\"width:100%; flex:1 1 auto;\"></div>
                     </div>
                 </div>
             </div>
         </div>
+        <script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
+        <script>
+            function toggleFullscreen(boxId, chartId) {{
+                const box = document.getElementById(boxId);
+                const isEntering = !box.classList.contains('fullscreen');
+                box.classList.toggle('fullscreen');
+                document.body.style.overflow = isEntering ? 'hidden' : '';
+                const chartDom = document.getElementById(chartId);
+                const inst = echarts.getInstanceByDom(chartDom);
+                setTimeout(() => {{ inst && inst.resize(); }}, 50);
+            }}
+
+            const histLabels = {json.dumps(history_labels, ensure_ascii=False)};
+            const histPassed = {json.dumps(history_passed)};
+            const histFailed = {json.dumps(history_failed)};
+            const histTotals = {json.dumps(history_totals)};
+            const histDurations = {json.dumps(history_durations)};
+            const growthLabels = {json.dumps(growth_labels, ensure_ascii=False)};
+            const growthTotals = {json.dumps(growth_totals)};
+
+            const barChart = echarts.init(document.getElementById('barChart'));
+            barChart.setOption({{
+                tooltip: {{ trigger: 'axis' }},
+                legend: {{ data: ['通过','失败','总计'] }},
+                grid: {{ left: 40, right: 20, top: 30, bottom: 30 }},
+                xAxis: {{ type: 'category', data: histLabels }},
+                yAxis: {{ type: 'value', min: 0 }},
+                series: [
+                    {{ name: '通过', type: 'bar', data: histPassed, itemStyle: {{ color: '#4CAF50' }} }},
+                    {{ name: '失败', type: 'bar', data: histFailed, itemStyle: {{ color: '#F44336' }} }},
+                    {{ name: '总计', type: 'bar', data: histTotals, itemStyle: {{ color: '#667eea' }} }},
+                ]
+            }});
+            barChart.on('click', params => console.log('Bar click', params));
+
+            const pieChart = echarts.init(document.getElementById('pieChart'));
+            const currentPassed = {passed};
+            const currentFailed = {failed};
+            pieChart.setOption({{
+                tooltip: {{ trigger: 'item' }},
+                legend: {{ top: 'top' }},
+                series: [{{
+                    name: '结果', type: 'pie', radius: ['40%','70%'],
+                    data: [
+                        {{ value: currentPassed, name: '通过', itemStyle: {{ color: '#4CAF50' }} }},
+                        {{ value: currentFailed, name: '失败', itemStyle: {{ color: '#F44336' }} }}
+                    ]
+                }}]
+            }});
+
+            const timeChart = echarts.init(document.getElementById('timeChart'));
+            timeChart.setOption({{
+                tooltip: {{ trigger: 'axis' }},
+                grid: {{ left: 48, right: 20, top: 30, bottom: 30 }},
+                xAxis: {{ type: 'category', data: histLabels }},
+                yAxis: {{ type: 'value', min: 0, name: '秒' }},
+                series: [{{ name: '耗时', type: 'line', data: histDurations, smooth: true, symbol: 'circle', itemStyle: {{ color: '#FF9800' }} }}]
+            }});
+
+            const growthChart = echarts.init(document.getElementById('growthChart'));
+            growthChart.setOption({{
+                tooltip: {{ trigger: 'axis' }},
+                grid: {{ left: 40, right: 20, top: 30, bottom: 60 }},
+                xAxis: {{ type: 'category', data: growthLabels, axisLabel: {{ rotate: 35 }} }},
+                yAxis: {{ type: 'value', min: 0 }},
+                series: [{{ name: '总计', type: 'line', data: growthTotals, symbol: 'circle', itemStyle: {{ color: '#2E7D32' }} }}]
+            }});
+        </script>
 """
 
         # 为了将测试用例列表放到页面底部，先在单独变量中构建 HTML
